@@ -1,39 +1,39 @@
-"""PhishGuard — Kiberxavfsizlik, IT yangiliklar va AI yordamchi ilovasi (Flask + SQLite). Ishga tushirish: python app.py"""
-import hashlib, io, json, os, re, time, urllib.request, zipfile
-from collections import defaultdict, deque
+Y
+"""PhishGuard — Kiberxavfsizlik va IT yangiliklar ilovasi (Flask). Ishga tushirish: python app.py"""
+import hashlib, io, json, os, re, zipfile
 from urllib.parse import urlparse
-from flask import Flask, Response, jsonify, request, send_from_directory
-
+from flask import Flask, Response, jsonify, request
+ 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
-
+ 
 LV = {"low": "Past xavf", "mid": "O'rta xavf", "high": "Yuqori xavf"}
 ADV = {
     "low": "Aniq xavf belgisi topilmadi, lekin bu kafolat emas. Shubha bo'lsa, rasmiy kanal orqali tekshiring.",
     "mid": "Ehtiyot bo'ling: havolani ochmang, ma'lumot kiritmang, rasmiy ilova yoki call-markaz orqali tekshiring.",
     "high": "Ochmang va hech narsa yubormang. Kod, parol yoki karta ma'lumotini bermang. Aldanib qolgan bo'lsangiz — SOS bo'limiga o'ting."
 }
-
+ 
 def out(kind, preview, score, reasons, extra=None):
     score = max(0, min(100, score))
     lv = "low" if score < 30 else "mid" if score < 60 else "high"
     return jsonify(score=score, level=lv, label=LV[lv], advice=ADV[lv], reasons=[{"t": t, "why": w} for t, w in reasons], **(extra or {}))
-
+ 
 BRANDS = {"payme": "payme.uz", "click": "click.uz", "uzcard": "uzcard.uz", "humo": "humo.uz", "paynet": "paynet.uz", "telegram": "telegram.org",
           "google": "google.com", "instagram": "instagram.com", "paypal": "paypal.com", "apple": "apple.com", "uzum": "uzum.uz", "olx": "olx.uz"}
 BAD_TLD = {"xyz", "top", "click", "tk", "ml", "gq", "cf", "work", "zip", "icu", "buzz", "cfd", "sbs"}
 SHORT = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "cutt.ly", "is.gd", "rb.gy", "shorturl.at"}
 KW = ["login", "verify", "secure", "update", "account", "bonus", "gift", "prize", "otp", "parol", "tasdiq", "sovrin", "yutuq", "confirm", "wallet"]
-
+ 
 def txt(n):
     j = request.get_json(silent=True)
     v = j.get("text", "") if isinstance(j, dict) else ""
     return v[:n] if isinstance(v, str) else str(v or "")[:n]
-
+ 
 def scan_url(raw):
     try: return _scan_url(raw)
     except Exception: return 0, [("URL tushunarsiz", "Manzil noto'g'ri yozilgan.")]
-
+ 
 def _scan_url(raw):
     raw = raw.strip(); scheme = bool(re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I))
     u = urlparse(raw if scheme else "https://" + raw); host = (u.hostname or "").lower(); s, r = 0, []
@@ -54,18 +54,18 @@ def _scan_url(raw):
     if host.count("-") >= 3: add(8, "Ko'p defis", "Soxta domenlarda tez-tez uchraydi.")
     if len(raw) > 75: add(8, "Juda uzun URL", "Uzun manzillar shubhali qismlarni yashirishi mumkin.")
     return s, r or [("Belgilar topilmadi", "Domen va tuzilishda ma'lum xavf belgisi yo'q.")]
-
+ 
 PAT = [(r"hozir|zudlik|tezda|24 soat|darhol|срочно|немедленно|сейчас|urgent|immediately|asap", 20, "Shoshiltirish", "Firibgarlar o'ylashga vaqt bermaydi."),
        (r"(sms|tasdiq\w*|maxfiy)\s*kod|kodni\s*(yubor|ayt)|\bpin\b|\bcvv\b|парол|код\s*из\s*смс|otp|parolni", 40, "Maxfiy kod/parol so'ralmoqda", "Bank hech qachon kod yoki PIN so'ramaydi."),
        (r"bloklan|yopil|to'xtatil|заблокир|suspend|blocked", 20, "Qo'rqitish", "Hisob yopilishi bilan qo'rqitish — klassik usul."),
        (r"yutuq|sovrin|tabriklaymiz|bonus|выигр|приз|congratulations|you won|prize", 25, "Yutuq va'dasi", "Kutilmagan sovrin xabarlari deyarli doim aldov."),
        (r"o'tkaz|pul\s*yubor|перевед|переслать|transfer|karta raqam|номер карты", 20, "Pul yoki karta so'rovi", "Notanish odamga pul/karta ma'lumoti yubormang."),
        (r"https?://|www\.|t\.me/|bit\.ly", 10, "Havola mavjud", "Xabardagi havolani ochishdan oldin tekshiring.")]
-
+ 
 @app.post("/api/url")
 def api_url():
     t = txt(500); s, r = scan_url(t); return out("URL", t, s, r)
-
+ 
 @app.post("/api/message")
 def api_msg():
     t = txt(3000); s, r = 0, []
@@ -76,11 +76,11 @@ def api_msg():
         us, ur = scan_url(u); s += us // 2
         r += [("Havola: " + a, b) for a, b in ur if us]
     return out("Xabar", t, s, r or [("Belgilar topilmadi", "Ma'lum firibgarlik iboralari aniqlanmadi.")])
-
+ 
 def luhn(n):
     d = [int(c) for c in n][::-1]
     return (sum(d[0::2]) + sum(sum(divmod(x * 2, 10)) for x in d[1::2])) % 10 == 0
-
+ 
 @app.post("/api/card")
 def api_card():
     t = txt(200); n = re.sub(r"\D", "", t)[:19]; s, r = 0, []
@@ -90,11 +90,11 @@ def api_card():
     if brand == "Noma'lum": s += 20; r.append(("Brend aniqlanmadi", "Uzcard/Humo/Visa/Mastercard emas."))
     r.append(("Eslatma", "PIN, CVV va SMS kodni hech kimga bermang — PhishGuard ham ularni saqlamaydi."))
     return out("Karta", None, s, r, {"masked": n[:4] + " **** **** " + n[-4:], "brand": brand})
-
+ 
 EXT_BAD = {"exe", "scr", "bat", "cmd", "js", "vbs", "jar", "msi", "apk", "ps1", "lnk", "iso"}
 PERM = {"SEND_SMS": 20, "READ_SMS": 20, "RECEIVE_SMS": 15, "BIND_ACCESSIBILITY_SERVICE": 25, "SYSTEM_ALERT_WINDOW": 15,
         "REQUEST_INSTALL_PACKAGES": 20, "BIND_DEVICE_ADMIN": 25, "RECORD_AUDIO": 8, "READ_CONTACTS": 8, "READ_CALL_LOG": 12}
-
+ 
 @app.post("/api/file")
 def api_file():
     f = request.files.get("file")
@@ -114,7 +114,7 @@ def api_file():
             ex["permissions"] = found
         except Exception: r.append(("APK o'qilmadi", "Fayl buzilgan yoki himoyalangan bo'lishi mumkin."))
     return out("Fayl", name, s, r or [("Aniq belgi topilmadi", "Hech bir skaner mutlaq xavfsizlikni kafolatlamaydi.")], ex)
-
+ 
 @app.get("/api/news")
 def api_news():
     return jsonify([
@@ -143,7 +143,7 @@ def api_news():
             "content": "Dasturlash va kiberxavfsizlik sohasida muvaffaqiyat qozonish uchun faqat kod yozish yetarli emas. Xalqaro RFC standartlari va texnik qo'llanmalarni ingliz tilida mukammal tushunish dasturchining eng asosiy ko'nikmasidir."
         }
     ])
-
+ 
 HTML = r'''<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>PhishGuard</title><link rel="manifest" href="/manifest.json"><link rel="icon" href="/icon.svg"><meta name="theme-color" content="#0b1020">
 <style>
@@ -194,11 +194,10 @@ nav button{flex:1;max-width:90px;background:none;border:0;color:var(--mu);font:i
 <button class="tile" data-go="file"><i>📁</i>FileGuard + APK <small>Xesh va ruxsatlar</small></button>
 <button class="tile" data-go="card"><i>💳</i>CardGuard <small>Karta raqami</small></button>
 <button class="tile" data-go="voice"><i>🎙</i>VoiceGuard <small>Ovozli tahlil</small></button>
-<button class="tile" data-go="chat"><i>🤖</i>AI Maslahatchi <small>Jonli suhbat</small></button>
 <button class="tile" data-nav="news"><i>📰</i>Yangiliklar <small>IT va Kiberxavfsizlik</small></button>
 </div>
 </section>
-
+ 
 <section id="check" hidden><div class="tabs" id="tabs"></div><div class="card"><h3 id="ct"></h3><div id="inp"></div></div><div id="out"></div></section>
 <section id="news" hidden><div class="card"><h2>📰 IT va Kiberxavfsizlik Yangiliklari</h2><p>Dasturlash, kompyuter tarmoqlari va axborot xavfsizligi bo'yicha global yangiliklar.</p><div id="news-list" style="margin-top:15px">Yuklanmoqda...</div></div></section>
 <section id="sos" hidden><div class="card"><h2>🆘 Men aldandim</h2><p>Ketma-ket tezkor qadamlarni bajaring.</p><div id="steps"></div><button class="btn g" id="cmp" style="margin-top:12px">📝 Shikoyat matnini tayyorlash</button><textarea id="cmpt" hidden></textarea></div></section>
@@ -213,14 +212,14 @@ nav button{flex:1;max-width:90px;background:none;border:0;color:var(--mu);font:i
 <button data-t="acad"><i>🎓</i>Akademiya</button>
 <button data-t="hist"><i>🕘</i>Tarix</button>
 </nav>
-
+ 
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
 const post=(p,b)=>fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
-
+ 
 let curMode="url", lang=ls("lang","uz");
-
+ 
 const SUB_TITLES = {
     uz: "IT, Tarmoqlar & Kiberxavfsizlik",
     kr: "ИТ, Тармоқлар ва Киберхавфсизлик",
@@ -228,7 +227,7 @@ const SUB_TITLES = {
     en: "IT, Networks & Cybersecurity",
     tr: "BT, Ağlar ve Siber Güvenlik"
 };
-
+ 
 const langSelect = $("#langSelect");
 if(langSelect){
     langSelect.value = lang;
@@ -239,7 +238,7 @@ if(langSelect){
         location.reload();
     };
 }
-
+ 
 function show(id){
     $$("main>section").forEach(s=>s.hidden=(s.id!==id));
     $$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===id));
@@ -249,7 +248,7 @@ function show(id){
     if(id==="news") loadNews();
     window.scrollTo(0,0);
 }
-
+ 
 $$("nav button").forEach(b=>b.onclick=()=>show(b.dataset.t));
 document.addEventListener("click", e=>{
     const btn = e.target.closest("[data-go]");
@@ -257,20 +256,19 @@ document.addEventListener("click", e=>{
     const navBtn = e.target.closest("[data-nav]");
     if(navBtn){ show(navBtn.dataset.nav); }
 });
-
+ 
 const M={
     url:["🔗 URL Scanner","Havolani joylang","https://payme-login.xyz/verify"],
     message:["💬 MessageGuard","SMS yoki xabar matnini joylang","Hisobingiz yopiladi — hozir tasdiqlash kodini yuboring"],
     card:["💳 CardGuard","Karta raqamini kiriting (saqlanmaydi)","8600 0000 0000 0000"],
     file:["📁 FileGuard + APK Shield","Fayl tanlang (maksimal 20 MB)"],
     qr:["📷 QR Guard","QR kodli rasm tanlang"],
-    voice:["🎙 VoiceGuard","Ovozli xabar yoki audio fayl yuklang"],
-    chat:["🤖 AI Maslahatchi (Jonli)","Kiberxavfsizlik va dasturlash bo'yicha savolingizni bering...","Masalan: Python'da xavfsiz API yozishni tushuntir"]
+    voice:["🎙 VoiceGuard","Ovozli xabar yoki audio fayl yuklang"]
 };
-
+ 
 $("#tabs").innerHTML=Object.keys(M).map(k=>`<button data-m="${k}">${M[k][0].split(" ")[0]} ${M[k][0].split(" ")[1]||""}</button>`).join("");
 $$("#tabs button").forEach(b=>b.onclick=()=>mode(b.dataset.m));
-
+ 
 function mode(m){
     curMode=m;
     $$("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
@@ -284,38 +282,12 @@ function mode(m){
     } else if(m==="voice") {
         $("#inp").innerHTML=`<p>${M[m][1]}</p><input type="file" accept="audio/*" id="vi"><button class="btn" id="go">Audio tahlil qilish</button>`;
         $("#go").onclick=()=>voiceScan($("#vi").files[0]);
-    } else if(m==="chat") {
-        chatUI();
     } else {
         $("#inp").innerHTML=`<p>${M[m][1]}</p><textarea id="t" placeholder="${M[m][2]}"></textarea><button class="btn" id="go">Tekshirish</button>`;
         $("#go").onclick=()=>run(m,$("#t").value);
     }
 }
-
-let CH=[];
-function chatUI(){
-    $("#inp").innerHTML=`<div id="cl" style="max-height:300px;overflow-y:auto;margin-bottom:12px"></div><textarea id="ci" placeholder="${M.chat[1]}"></textarea><button class="btn" id="cb">Yuborish</button>`;
-    drawChat();
-    $("#cb").onclick=()=>sendChat($("#ci").value);
-}
-function drawChat(){
-    const l=$("#cl"); if(!l) return;
-    l.innerHTML=CH.map(m=>`<div class="card" style="${m.role==='user'?'margin-left:20px':'margin-right:20px;border-color:var(--ac)'}"><p style="white-space:pre-line;color:var(--tx)">${esc(m.content)}</p></div>`).join("")||"<p>Hali xabarlar yo'q. Savol bering!</p>";
-    l.scrollTop=l.scrollHeight;
-}
-async function sendChat(t){
-    if(!t.trim()) return;
-    CH.push({role:"user",content:t}); $("#ci").value="";
-    CH.push({role:"assistant",content:"AI o'ylamoqda..."}); drawChat();
-    try{
-        const r = await post("/api/chat",{messages:CH.slice(0,-1),lang});
-        CH[CH.length-1].content = r.text || r.error || "Javob kelmadi.";
-    }catch{
-        CH[CH.length-1].content = "Server bilan aloqa yo'q.";
-    }
-    drawChat();
-}
-
+ 
 async function loadNews(){
     try{
         const res = await fetch("/api/news").then(r=>r.json());
@@ -330,7 +302,7 @@ async function loadNews(){
         $("#news-list").innerHTML = "<p>Yangiliklarni yuklab bo'lmadi.</p>";
     }
 }
-
+ 
 async function run(m,text){
     if(!text || !text.trim()) return;
     $("#out").innerHTML='<div class="card">Tahlil qilinmoqda…</div>';
@@ -338,12 +310,11 @@ async function run(m,text){
         const r = await post("/api/"+m, {text});
         render(r);
         rec(m, m==="card"?"":text, r);
-        if(m!=="card" && !r.error) aiExplain(text, r);
     }catch{
         $("#out").innerHTML='<div class="card">Server bilan aloqa yo\'q.</div>';
     }
 }
-
+ 
 async function fileScan(f){
     if(!f) return;
     const fd=new FormData(); fd.append("file",f);
@@ -356,7 +327,7 @@ async function fileScan(f){
         $("#out").innerHTML='<div class="card">Fayl yuborilmadi.</div>';
     }
 }
-
+ 
 async function voiceScan(f){
     if(!f) return;
     $("#out").innerHTML='<div class="card">Ovozli tahlil bajarilmoqda…</div>';
@@ -364,55 +335,37 @@ async function voiceScan(f){
         render({score:15, level:"low", label:"Past xavf", advice:"Ovozli tahlil natijasida shubhali sintetik (Deepfake) belgilar topilmadi.", reasons:[{t:"Spektral barqarorlik", why:"Ovoz chastotasi tabiiy diapazonga mos."}]});
     }, 1500);
 }
-
+ 
 function qrFile(f){
     if(!f) return alert("Rasm tanlang!");
     $("#out").innerHTML='<div class="card">QR kod skanerlandi va tarmoq trafigi tahlil qilindi.</div>';
 }
-
+ 
 function render(r){
     if(r.error){ $("#out").innerHTML=`<div class="card">${esc(r.error)}</div>`; return; }
     const ex = (r.masked ? `<p>${esc(r.brand)} • ${esc(r.masked)}</p>` : "") + (r.sha256 ? `<p>SHA-256:<br><code>${r.sha256}</code></p>` : "");
     $("#out").innerHTML=`<div class="card ${r.level}"><div class="res"><div class="ring ${r.level}" style="--p:${r.score}"><b>${r.score}</b></div><div><div class="lbl">${r.label}</div><p>${esc(r.advice)}</p></div></div>${ex}<ul class="rs ${r.level}">${r.reasons.map(x=>`<li><b>${esc(x.t)}</b><span>Nega? ${esc(x.why)}</span></li>`).join("")}</ul>${r.level==="high"?'<button class="btn" style="margin-top:12px" onclick="show(\'sos\')">🆘 Aldanib qoldim</button>':""}</div>`;
 }
-
-async function aiExplain(text, r){
-    const c = $("#out .card"); if(!c) return;
-    const btn = document.createElement("button");
-    btn.className = "btn g"; btn.style.marginTop = "12px"; btn.textContent = "🤖 AI bilan chuqur tahlil qilish";
-    const p = document.createElement("p"); p.style.whiteSpace = "pre-line"; p.style.marginTop = "8px";
-    btn.onclick = async()=>{
-        btn.disabled = true; btn.textContent = "AI o'ylamoqda...";
-        try{
-            const res = await post("/api/ai", {lang, text, result: r});
-            p.textContent = res.text || res.error || "Javob olinmadi.";
-        }catch{
-            p.textContent = "AI bilan aloqa yo'q.";
-        }
-        btn.remove();
-    };
-    c.append(btn, p);
-}
-
+ 
 const SOS=[
     ["Kartani himoyalash","Bankning rasmiy ilovasi yoki call-markazi orqali kartani bloklang."],
     ["Bankka xabar berish","Rasmiy aloqa kanali orqali shubhali operatsiya haqida xabar bering."],
     ["Hisoblarni himoyalash","Parollarni almashtiring va 2-bosqichli himoyani yoqing."],
     ["Dalillarni saqlash","Xabar va tranzaksiya skrinshotlarini saqlang."]
 ];
-
+ 
 function steps(){
     const d=ls("sos",[]);
     $("#steps").innerHTML=SOS.map((s,i)=>`<label class="step ${d[i]?"d":""}"><input type="checkbox" data-i="${i}" ${d[i]?"checked":""}><div><b>${i+1}. ${s[0]}</b><p>${s[1]}</p></div></label>`).join("");
     $$("#steps input").forEach(c=>c.onchange=()=>{const x=ls("sos",[]);x[c.dataset.i]=c.checked;sv("sos",x);steps()});
 }
 steps();
-
+ 
 $("#cmp").onclick=()=>{
     const t=$("#cmpt"); t.hidden=false;
     t.value=`Hurmatli bank xodimlari!\n\n${new Date().toLocaleString("uz")} da men kiberfiribgarlik qurboni bo'ldim. Tarmoq va tranzaksiya ma'lumotlarini tekshirishingizni so'rayman.`;
 };
-
+ 
 const Q=[
     ["Telegram'da tanishingiz ovozi bilan kelgan audioxabarda zudlik bilan pul o'tkazishni so'rashmoqda. Nima qilasiz?", ["Darhol pul o'tkazaman, chunki ovozi o'ziniki","Boshqa aloqa kanali orqali unga o'zim qo'ng'iroq qilib tasdiqlayman","Hech narsa qilmayman, e'tibor bermayman"], 1, "Sun'iy intellekt (Deepfake) yordamida yaqinlaringiz ovozini soxtalashtirishlari mumkin. Har doim boshqa aloqa orqali tekshiring."],
     ["Sayt manzili: https://click.uz.security-update.xyz. Bu manzil haqiqiy Click saytimi?", ["Ha, chunki boshida click.uz yozilgan","Yo'q, bu soxta fishing domen (asosiy domen oxirgi ikki qismda bo'ladi)","Ha, xavfsizlik yangilanishi sahifasi"], 1, "Firibgarlar taniqli brend nomini domen boshiga yozib, haqiqiy kabi ko'rsatishga harakat qilishadi."],
@@ -420,7 +373,7 @@ const Q=[
     ["TCP/IP modelining transport qatlamida qaysi protokollar ishlaydi?", ["IP va ARP","TCP va UDP","HTTP va FTP","DNS va DHCP"], 1, "TCP va UDP tarmoqda ma'lumotlar ishonchli yoki tezkor uzatilishini ta'minlovchi transport qatlam protokollaridir."],
     ["Jamoat joyidagi (cafe) ochiq Wi-Fi tarmog'iga ulanib bank ilovasidan foydalanishning xavfi nimada?", ["Hech qanday xavfi yo'q","Trafigingizni 'Man-in-the-Middle' (o'rtadagi odam) hujumi orqali ushlab qolishlari mumkin","Internet tezligi pasayib ketadi"], 1, "Ochiq tarmoqlarda shifrlanmagan ma'lumotlar tajovuzkorlar tomonidan o'qib olinishi mumkin."]
 ];
-
+ 
 let qi=0,qs=0;
 function quiz(){ qi=0; qs=0; qn(); }
 function qn(){
@@ -442,14 +395,14 @@ function qn(){
         setTimeout(()=>{qi++;qn()},1800);
     });
 }
-
+ 
 function rec(k,p,r){
     if(r.error) return;
     const x=ls("hist",[]);
     x.unshift({kind:k,preview:String(p).slice(0,80),score:r.score,level:r.level});
     sv("hist",x.slice(0,50));
 }
-
+ 
 function stats(){
     const x=ls("hist",[]), hi=x.filter(i=>i.level==="high").length;
     $("#n1").textContent=x.length;
@@ -457,60 +410,29 @@ function stats(){
     $("#hs").textContent=x.length ? `${hi} ta yuqori xavfli holat aniqlandi.` : "Tahlillar hali yo'q. Birinchi tarmoq yoki havolani tekshiring.";
     $("#n3").textContent=ls("acad",null)==null ? "—" : ls("acad",0)+"%";
 }
-
+ 
 function hist(){
     $("#hl").innerHTML=ls("hist",[]).map(x=>`<div class="h"><div><b>${esc(x.kind)}</b><br><code>${esc(x.preview||"")}</code></div><span class="pill" style="--c:var(--${x.level})">${x.score}</span></div>`).join("")||"<p>Bo'sh.</p>";
 }
 $("#hc").onclick=()=>{ if(confirm("Tarix o'chirilsinmi?")){ sv("hist",[]); hist(); } };
-
+ 
 mode("url"); show("home");
 </script>
 </body></html>
 '''
-
-LANGS = {"uz": " Javob tili: o'zbek.", "kr": " Javob tili: o'zbek (kirill).", "ru": " Язык ответа: русский.", "en": " Reply in English.", "tr": " Türkçe yanıt ver."}
-SYS = "Sen PhishGuard kiberxavfsizlik, dasturlash va kompyuter tarmoqlari bo'yicha mutaxassis va yordamchisan. Qisqa, professional va aniq maslahat ber."
-
-@app.post("/api/ai")
-def api_ai():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key: return jsonify(error="AI yo'qilmagan: ANTHROPIC_API_KEY o'rnatilmagan."), 503
-    j = request.get_json(silent=True) or {}
-    msg = f"Tahlil natijasi: {json.dumps(j.get('result'), ensure_ascii=False)}\nMatn: {j.get('text', '')}"
-    body = json.dumps({"model": os.environ.get("AI_MODEL", "claude-sonnet-5-5"), "max_tokens": 400, "system": SYS + LANGS.get(j.get("lang"), ""), "messages": [{"role": "user", "content": msg}]}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", body, {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r: d = json.load(r)
-        return jsonify(text="".join(b.get("text", "") for b in d.get("content", [])).strip())
-    except Exception: return jsonify(error="AI hozir javob bermadi."), 502
-
-@app.post("/api/chat")
-def api_chat():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key: return jsonify(error="AI yo'qilmagan: ANTHROPIC_API_KEY o'rnatilmagan."), 503
-    j = request.get_json(silent=True) or {}; ms = []
-    for m in (j.get("messages") or [])[-10:]:
-        if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str):
-            ms.append({"role": m["role"], "content": m["content"][:1500]})
-    if not ms: return jsonify(error="Xabar yo'q."), 400
-    body = json.dumps({"model": os.environ.get("AI_MODEL", "claude-sonnet-5-5"), "max_tokens": 500, "system": SYS + LANGS.get(j.get("lang"), ""), "messages": ms}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", body, {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r: d = json.load(r)
-        return jsonify(text="".join(b.get("text", "") for b in d.get("content", [])).strip())
-    except Exception: return jsonify(error="AI bilan bog'lanishda xatolik."), 502
-
+ 
 @app.get("/health")
 def health(): return "ok"
-
+ 
 @app.get("/")
 def index(): return Response(HTML, mimetype="text/html")
-
+ 
 @app.get("/manifest.json")
 def manifest(): return Response(json.dumps({"name": "PhishGuard", "short_name": "PhishGuard", "start_url": "/", "display": "standalone", "background_color": "#0b1020", "theme_color": "#0b1020"}), mimetype="application/manifest+json")
-
+ 
 @app.get("/icon.svg")
 def icon(): return Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="#5eead4"/></svg>', mimetype="image/svg+xml")
-
+ 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=bool(os.environ.get("DEBUG")))
+ 
